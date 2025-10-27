@@ -2,7 +2,7 @@
 #_*-_ coding: utf-8 _*_
 
 
-###Leonel Version
+###  Leonel Version
 import urllib.request
 import urllib.parse
 from bs4 import BeautifulSoup  
