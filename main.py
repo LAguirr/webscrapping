@@ -46,7 +46,7 @@ def main():
             citations_tag = line.find('div', class_='gs_a')
             citations = citations_tag.text if citations_tag else "N/A"
             
-            print(f"\n--- Resultado {i+1} ---")
+            print(f"\n--- Result {i+1} ---")
             print(f"Title: {title}")
             print(f"Link: {link}")
             print(f"Authors: {citations}")
