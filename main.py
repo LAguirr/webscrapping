@@ -7,6 +7,7 @@ import urllib.request
 import urllib.parse
 from bs4 import BeautifulSoup  
 import json
+import os
 
 url =  'https://scholar.google.com/scholar?q='
 subjet_search = "proximal policy optimization ppo"
@@ -17,6 +18,9 @@ user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTM
 headers = {'User-Agent': user_agent}
 
 logs_json = []
+avoid_duplicates = []
+
+file_name = 'results_google_scholar.json'
 def main():
 
         file_web = open("schoolargoogle.html", "w+", encoding='utf-8')
@@ -60,13 +64,36 @@ def main():
             }
 
             logs_json.append(log)
-        with open('results_google_scholar.json', 'w', encoding='utf-8') as f:
-            json.dump(logs_json, f, ensure_ascii=False, indent=4)
+        #with open('results_google_scholar.json', 'w', encoding='utf-8') as f:
+            #json.dump(logs_json, f, ensure_ascii=False, indent=4)
       
 
-    #except urllib.error.URLError as e:
-     #   print(f"Error al abrir la URL: {e.reason}")
+        if os.path.exists(file_name):
+            with open(file_name, 'r', encoding='utf-8') as f:
+                try:
+                    file = json.load(f)
 
+                    # Avoid duplicates based on title
+                    titles = {item['title'] for item in file}
+
+                except json.JSONDecodeError:
+                    file = []
+        else: 
+            with open(file_name, 'w', encoding='utf-8') as f:
+                file = []
+                json.dump(file, f, ensure_ascii=False, indent=4)
+            titles = set()
+
+
+        for article in logs_json:
+            if article['title'] not in titles:
+                avoid_duplicates.append(article)
+                titles.add(article['title'])
+
+        file.extend(avoid_duplicates)
+
+        with open(file_name, 'w', encoding='utf-8') as f:
+            json.dump(file, f, ensure_ascii=False, indent=4)
 
 
 if __name__ == '__main__':
