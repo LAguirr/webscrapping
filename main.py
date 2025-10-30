@@ -30,9 +30,9 @@ def fetch_url(url_index):
     
     if url_index == 0:  # Google Scholar
         full_url = url[0] + encoded_search
-    elif url_index == 1:  # IEE Xplore
+    elif url_index == 1:  # ACM
         full_url = url[1] + encoded_search 
-    elif url_index == 2:  # ACM
+    elif url_index == 2:  # IEE Xplore
         full_url = url[2] + encoded_search
     
     print(f"\n--- Consultando en: {full_url}")
@@ -130,18 +130,50 @@ def google_scholar():
             """
 
 def ieee():
-    full_url = url[1] + encoded_search
-    html_content = fetch_url(1)
+    full_url = url[2] + encoded_search
+    html_content = fetch_url(2)
     if not html_content:
         return
+    
+    file_web = open("ieee.html", "w+", encoding='utf-8')
+    file_web.write(str(html_content))
+    file_web.close()
+    html= open("ieee.html", "r+", encoding='utf-8')
+    soup = BeautifulSoup(html_content, 'html.parser')
+
+    class_searched = 'List-results-items' 
+
+    result = soup.find_all('div', class_=class_searched)
+    print(result)
+    for i, line in enumerate(result):
+        # Título
+        title_tag = line.find('h2', class_='document-title')
+        title = title_tag.text.strip() if title_tag else "IEEE Title N/A"
+        
+        # Enlace
+        link_tag = line.find('a')
+        link = "https://ieeexplore.ieee.org" + link_tag['href'] if link_tag and link_tag.get('href') else "IEEE Link N/A"
+
+        # Autores (Selector estimado)
+        authors_tag = line.find('p', class_='authors')
+        authors = authors_tag.text.strip() if authors_tag else "IEEE Authors N/A"
+        
+        log = {
+            'site': 'IEEE',
+            'title': title,
+            'link': link,
+            'authors': authors
+        }
+        logs_json.append(log)
+    print(f"   -> {len(result)} resultados añadidos (IEEE).")
     
 
     
 
 
 def acm():
-    full_url = url[2] + encoded_search 
-    html_content = fetch_url(2)
+    full_url = url[1] + encoded_search 
+    html_content = fetch_url(1)
     if not html_content:
         return
     file_web = open("acm.html", "w+", encoding='utf-8')
