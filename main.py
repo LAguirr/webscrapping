@@ -9,11 +9,13 @@ from bs4 import BeautifulSoup
 import json
 import os
 
-url =  ['https://scholar.google.com/scholar?q=', 'https://www.acm.org/search#stq=', 'https://ieeexplore.ieee.org/search/searchresult.jsp?newsearch=true&queryText=']
+
+url =  'https://scholar.google.com/scholar?q='
 subjet_search = "proximal policy optimization ppo"
 encoded_search = urllib.parse.quote_plus(subjet_search)
-
-
+results_per_page = '&num=5'
+full_url = url + encoded_search + results_per_page
+print(full_url)
 user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.60 Safari/537.36'
 headers = {'User-Agent': user_agent}
 
@@ -22,85 +24,118 @@ avoid_duplicates = []
 
 file_name = 'results_google_scholar.json'
 
-
-
-def fetch_url(url_index):
-    """Realiza la consulta HTTP con la URL y User-Agent."""
-    
-    
-    if url_index == 0:  # Google Scholar
-        full_url = url[0] + encoded_search
-    elif url_index == 1:  # ACM
-        full_url = url[1] + encoded_search 
-    elif url_index == 2:  # IEE Xplore
-        full_url = url[2] + encoded_search
-    
-    print(f"\n--- Consultando en: {full_url}")
-    
-    req = urllib.request.Request(full_url, headers=headers)
-    
+def get_abstract(article_url):
+    # Function to fetch and parse the article page to extract the abstract
+    req = urllib.request.Request(article_url, headers=headers)
     try:
+        with urllib.request.urlopen(req) as response:
+            page_content = response.read()
+            soup = BeautifulSoup(page_content, 'html.parser')
+            abstract_tag = soup.find('div', class_='abstract')  # Example class name
+            print("Abstract "+ str(abstract_tag))
+            abstract = abstract_tag.get_text(strip=True) if abstract_tag else "Abstract not found"
+            return abstract
+    except Exception as e:
+        print(f"Error fetching abstract: {e}")
+        return "Abstract not found"
+
+def get_article(article): 
+    # Function to fetch and parse individual article pages if needed
+
+    print(f"\nDownloading article: {article}")
+    #if article['pdf'] == '[PDF]': #If there is no PDF available, skip
+    link = article['link']
+    title = article.get('title').replace('/', '_')
+    print(f"\nTrying to download: {title}")
+            
+    pdf_filename = f"{title}_GS.pdf"
+
+    req = urllib.request.Request(link, headers={'User-Agent': user_agent})
+            
+    try:
+
+        with urllib.request.urlopen(req) as response:
+                    
+            pdf_content = response.read()
+            os.makedirs('pdf', exist_ok=True) #Create directory if it doesn't exist
+            full_file_path = os.path.join('pdf', pdf_filename)
+            with open(full_file_path, 'wb') as f_pdf:
+                       f_pdf.write(pdf_content)
+                
+            print(f"Download Succesfully. Saved as: {full_file_path}")
+            return full_file_path
+
+            
+    except urllib.error.HTTPError as e:
+        print(f"Error HTTP downloading: {e.code}. The server refused the download.")
+    except urllib.error.URLError as e:
+        print(f"Error de URL downloading: {e.reason}")
+    except Exception as e:
+        print(f"Unexpected Error trying to download: {e}")
+
+def main():
+
+        file_web = open("schoolargoogle.html", "w+", encoding='utf-8')
+        req = urllib.request.Request(full_url, headers={'User-Agent': user_agent})
         consult = urllib.request.urlopen(req)
         consult_bytes = consult.read()
+    
         consult_html = consult_bytes.decode('utf-8')
-        print(f"Conexión exitosa con {full_url}.")
-        return consult_html
-    
-    except urllib.error.HTTPError as e:
-        print(f"Error HTTP en {full_url}: {e.code} - {e.reason}")
-    except urllib.error.URLError as e:
-        print(f"Error de URL en {full_url}: {e.reason}")
-    except Exception as e:
-        print(f"Error desconocido al consultar {full_url}: {e}")
-        
-    return None
-
-
-def google_scholar(): 
-        
-        file_web = open("schoolargoogle.html", "w+", encoding='utf-8')
-    
-        consult_html = fetch_url(0)
     
         print("Connection succesful. First 50 characters:")
         print(consult_html[:50])
 
-        file_web.write(str(consult_html))
+        file_web.write(str(consult_bytes.decode('utf-8')))
         file_web.close()
 
-        html= open("schoolargoogle.html", "r+", encoding='utf-8')
-        soup = BeautifulSoup(html, 'html.parser')
+        html= open("schoolargoogle.html", "r+")
+        soup = BeautifulSoup(consult_html, 'html.parser')
         class_searched = 'gs_r gs_or gs_scl'
         result = soup.find_all('div', class_=class_searched)
     
         for i, line in enumerate(result):
-            
+
+
             title_tag = line.find('h3', class_='gs_rt')
             title = title_tag.text if title_tag else "N/A"
             
+            pdf_tag = line.find('span', class_='gs_ctg2')
+            pdf = pdf_tag.text if pdf_tag else "N/A"
+                
             link_tag = line.find('a')
             link = link_tag['href'] if link_tag else "N/A"
 
+            site_tag = link.split('/')[2].split('.')[0] if link_tag else None
+            site = site_tag if site_tag !='www' else link.split('/')[2].split('.')[-2]
+
+            page_tag = line.find('h3', class_='gs_rt')
+            page = page_tag.find('a')['href'] if page_tag and page_tag.find('a') else "N/A"
+
             citations_tag = line.find('div', class_='gs_a')
-            citations = citations_tag.text if citations_tag else "N/A"
+            citations = citations_tag.text.split('-')[0] if citations_tag else "N/A"
             
             print(f"\n--- Result {i+1} ---")
+            print(f"Site: {site}")
+            print(f"PDF: {pdf}")
             print(f"Title: {title}")
             print(f"Link: {link}")
             print(f"Authors: {citations}")
-
+            
             log = {
-                'source': 'Google Scholar',
+                'site': site,
                 'title': title,
+                'page': page,
                 'link': link,
-                'authors': citations
+                'authors': citations,
+                'pdf': pdf
+
             }
 
             logs_json.append(log)
         #with open('results_google_scholar.json', 'w', encoding='utf-8') as f:
             #json.dump(logs_json, f, ensure_ascii=False, indent=4)
       
-        """
+
         if os.path.exists(file_name):
             with open(file_name, 'r', encoding='utf-8') as f:
                 try:
@@ -117,130 +152,28 @@ def google_scholar():
                 json.dump(file, f, ensure_ascii=False, indent=4)
             titles = set()
 
-
+        # Append new articles avoiding duplicates
         for article in logs_json:
             if article['title'] not in titles:
+                path = get_article(article) # Download the article and get the file path
+                
+                article['path'] = path
+                avoid_duplicates.append(article)
+
+
+                #I need to add the abstract extraction here
+                abstract = get_abstract(article['link']) # Fetch the abstract
+                article['abstract'] = abstract
                 avoid_duplicates.append(article)
                 titles.add(article['title'])
+                
 
         file.extend(avoid_duplicates)
 
         with open(file_name, 'w', encoding='utf-8') as f:
             json.dump(file, f, ensure_ascii=False, indent=4)
-            """
-
-def ieee():
-    full_url = url[2] + encoded_search
-    html_content = fetch_url(2)
-    if not html_content:
-        return
-    
-    file_web = open("ieee.html", "w+", encoding='utf-8')
-    file_web.write(str(html_content))
-    file_web.close()
-    html= open("ieee.html", "r+", encoding='utf-8')
-    soup = BeautifulSoup(html_content, 'html.parser')
-
-    class_searched = 'List-results-items' 
-
-    result = soup.find_all('div', class_=class_searched)
-    print(result)
-    for i, line in enumerate(result):
-        # Título
-        title_tag = line.find('h2', class_='document-title')
-        title = title_tag.text.strip() if title_tag else "IEEE Title N/A"
-        
-        # Enlace
-        link_tag = line.find('a')
-        link = "https://ieeexplore.ieee.org" + link_tag['href'] if link_tag and link_tag.get('href') else "IEEE Link N/A"
-
-        # Autores (Selector estimado)
-        authors_tag = line.find('p', class_='authors')
-        authors = authors_tag.text.strip() if authors_tag else "IEEE Authors N/A"
-        
-        log = {
-            'site': 'IEEE',
-            'title': title,
-            'link': link,
-            'authors': authors
-        }
-        logs_json.append(log)
-    print(f"   -> {len(result)} resultados añadidos (IEEE).")
-    
-
-    
-
-
-def acm():
-    full_url = url[1] + encoded_search 
-    html_content = fetch_url(1)
-    if not html_content:
-        return
-    file_web = open("acm.html", "w+", encoding='utf-8')
-    file_web.write(str(html_content))
-    file_web.close()
-    html= open("acm.html", "r+", encoding='utf-8')
-    soup = BeautifulSoup(html, 'html.parser')
-
-    class_searched = 'issue-item__content' 
-    result = soup.find_all('div', class_=class_searched)
-
-    for line in result:
-        title_tag = line.find('h5', class_='issue-item__title')
-        title = title_tag.text.strip() if title_tag else "ACM Title N/A"
-        
-        link_tag = line.find('a')
-        link = "https://dl.acm.org" + link_tag['href'] if link_tag and link_tag.get('href') else "ACM Link N/A"
-        
-        authors_tag = line.find('div', class_='issue-item__content-authors')
-        authors = authors_tag.text.strip() if authors_tag else "ACM Authors N/A"
-        
-        log = {
-            'site': 'ACM',
-            'title': title,
-            'link': link,
-            'authors': authors
-        }
-        logs_json.append(log)
-    print(f"   -> {len(result)} resultados añadidos (ACM).")
 
 
 if __name__ == '__main__':
-    #google_scholar()
-    ieee()
-    #acm()
-
-
-resultados_existentes = []
-nuevos_a_añadir = []
-titulos_existentes = set()
-count_duplicados = 0
-
-if os.path.exists(file_name):
-    with open(file_name, 'r', encoding='utf-8') as f:
-        try:
-            resultados_existentes = json.load(f)
-            # 2.1. Crear set de títulos existentes
-            titulos_existentes = {item['title'] for item in resultados_existentes}
-        except json.JSONDecodeError:
-            print("Archivo JSON corrupto o vacío. Reiniciando log.")
-            resultados_existentes = []
-            
-# 2.2. Filtrar logs_json (que contiene los nuevos resultados de todas las funciones)
-for article in logs_json:
-    if article['title'] not in titulos_existentes:
-        nuevos_a_añadir.append(article)
-        titulos_existentes.add(article['title']) # Prevenir duplicados en la misma ejecución
-    else:
-        count_duplicados += 1
-
-# 2.3. Unir y Guardar
-resultados_existentes.extend(nuevos_a_añadir)
-
-with open(file_name, 'w', encoding='utf-8') as f:
-    json.dump(resultados_existentes, f, ensure_ascii=False, indent=4)
-
-print(f"\n--- RESUMEN FINAL ---")
-print(f"Se omitieron {count_duplicados} duplicados.")
-print(f"Se añadieron {len(nuevos_a_añadir)} registros nuevos.")
-print(f"Total de registros en '{file_name}': {len(resultados_existentes)}")
+    main()
+    #article()
